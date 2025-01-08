@@ -1,13 +1,13 @@
 {
   "dependencies": {
-    "@azure/msal-browser": "^3.28.0"
+    "@azure/msal-browser": "^3.28.0",
+    "serve": "^14.2.4"
   },
   "name": "almacenamiento",
   "version": "1.0.0",
   "main": "script.js",
-  "devDependencies": {},
   "scripts": {
-    "start": "serve . -p 3000" ,
+    "start": "serve . -p 3000",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
