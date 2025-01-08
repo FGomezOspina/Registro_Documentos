@@ -2,8 +2,7 @@
  * script.js
  ******************************/
 // Configuración de la aplicación Google
-const CLIENT_ID =
-  '185434111940-8gsma18aau8fd6lqqa9k0njbdvuuhc0p.apps.googleusercontent.com';
+const CLIENT_ID = '185434111940-8gsma18aau8fd6lqqa9k0njbdvuuhc0p.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 let tokenClient; // Cliente GIS para manejar tokens
 let accessToken = null;
@@ -18,7 +17,7 @@ const folderNames = {
   'Consultas de Antecedentes': null,
 };
 
-// Inicializar Google Identity Services
+// 1. Inicializar Google Identity Services
 function initGoogleAPI() {
   if (google && google.accounts && google.accounts.oauth2) {
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -38,7 +37,7 @@ function initGoogleAPI() {
   }
 }
 
-// Actualizar estado de autenticación
+// 2. Actualizar estado de autenticación
 function updateSigninStatus(isSignedIn) {
   if (isSignedIn && accessToken) {
     document.getElementById('login-btn').style.display = 'none';
@@ -49,7 +48,7 @@ function updateSigninStatus(isSignedIn) {
   }
 }
 
-// Manejar clic en "Iniciar sesión"
+// 3. Manejar clic en "Iniciar sesión"
 function handleAuthClick() {
   if (!tokenClient) {
     alert('El cliente de autenticación no se ha inicializado correctamente.');
@@ -63,7 +62,7 @@ function handleAuthClick() {
   }
 }
 
-// Manejar clic en "Cerrar sesión"
+// 4. Manejar clic en "Cerrar sesión"
 function handleSignOutClick() {
   if (accessToken) {
     google.accounts.oauth2.revoke(accessToken, () => {
@@ -78,14 +77,16 @@ function handleSignOutClick() {
 }
 
 /********************************************************
- * 1. Función para abrir el modal y establecer el tipo
+ * Función para abrir el modal y establecer el tipo de doc
  ********************************************************/
 function abrirModal(tipo) {
   tipoDocumentoActual = tipo; // Guardamos el tipo en una variable global
+
   // Limpiamos los campos del modal
   document.getElementById('fechaSubida').value = '';
   document.getElementById('tiempoRecordatorio').value = '';
   document.getElementById('fileInputModal').value = '';
+
   // Abrimos el modal con Bootstrap
   const modal = new bootstrap.Modal(document.getElementById('uploadModal'), {
     keyboard: false,
@@ -94,35 +95,62 @@ function abrirModal(tipo) {
 }
 
 /********************************************************
- * 2. Función que se ejecuta al hacer clic en "Subir" dentro del modal
+ * Función para calcular la fecha de vencimiento
+ * fechaBase (YYYY-MM-DD) + X meses (según 'recordatorio')
+ ********************************************************/
+function calcularFechaVencimiento(fechaBase, recordatorio) {
+  // Ejemplo:
+  // fechaBase = "2025-01-07"
+  // recordatorio = "0 meses", "1 mes", "2 meses", "12 meses", etc.
+  const [year, month, day] = fechaBase.split('-').map(Number);
+  let dateObj = new Date(year, month - 1, day);
+
+  // parseInt(recordatorio) leerá solo la parte numérica (por ejemplo "0 meses" => 0)
+  const nMeses = parseInt(recordatorio, 10);
+
+  // Sumamos nMeses al mes actual
+  dateObj.setMonth(dateObj.getMonth() + nMeses);
+
+  // Convertimos de vuelta a string YYYY-MM-DD
+  const newYear = dateObj.getFullYear();
+  const newMonth = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const newDay = String(dateObj.getDate()).padStart(2, '0');
+
+  return `${newYear}-${newMonth}-${newDay}`;
+}
+
+/********************************************************
+ * Función que se ejecuta al hacer clic en "Subir" (modal)
  ********************************************************/
 async function handleSubirArchivo() {
   // Obtener valores del modal
-  const fecha = document.getElementById('fechaSubida').value;
+  const fechaSubida = document.getElementById('fechaSubida').value;
   const recordatorio = document.getElementById('tiempoRecordatorio').value;
   const fileInput = document.getElementById('fileInputModal');
   const file = fileInput.files[0];
 
-  if (!fecha || !recordatorio || !file) {
+  if (!fechaSubida || !recordatorio || !file) {
     alert('Por favor completa todos los campos y selecciona un archivo.');
     return;
   }
 
-  // Aquí podrías hacer algo con "recordatorio" si necesitas guardarlo,
-  // p. ej. enviarlo también como parte del metadata (usando la descripción).
-  // Llamamos a la misma función subirArchivo pero le pasamos la fecha:
-  subirArchivo(tipoDocumentoActual, fecha);
+  // Calculamos la fecha de vencimiento
+  const fechaVencimiento = calcularFechaVencimiento(fechaSubida, recordatorio);
 
-  // Cerramos el modal manualmente
+  // Subimos el archivo con toda la información
+  subirArchivo(tipoDocumentoActual, fechaSubida, recordatorio, fechaVencimiento);
+
+  // Cerramos el modal
   const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
   modal.hide();
 }
 
 /********************************************************
- * 3. Subir archivo a Google Drive
- *    Se modifica para recibir la fecha como parámetro
+ * Subir archivo a Google Drive
+ * Guarda un JSON en "description" con fecha, recordatorio,
+ * fechaVencimiento y el tipo de documento
  ********************************************************/
-async function subirArchivo(tipo, fecha) {
+async function subirArchivo(tipo, fechaSubida, recordatorio, fechaVencimiento) {
   // Obtenemos el archivo desde el modal
   const file = document.getElementById('fileInputModal').files[0];
   if (!file) {
@@ -130,18 +158,26 @@ async function subirArchivo(tipo, fecha) {
     return;
   }
 
-  // Creamos/cargamos carpeta
+  // Creamos/cargamos carpeta según el tipo
   const folderId = await createFolder(tipo);
 
-  // EJEMPLO: podemos guardar la fecha en la propiedad "description" del archivo
-  // para recuperarla luego en la list. Dependerá de tu implementación
+  // Construimos el objeto JSON con toda la info
+  const infoMetadata = {
+    fechaSubida,
+    recordatorio,
+    fechaVencimiento,
+    tipo,
+  };
+
+  // "description" de Drive solo permite strings, convertimos a JSON:
   const metadata = {
     name: file.name,
     mimeType: file.type,
     parents: [folderId],
-    description: fecha, // Guardar la fecha en la descripción
+    description: JSON.stringify(infoMetadata),
   };
 
+  // Creamos el form data para la subida
   const form = new FormData();
   form.append(
     'metadata',
@@ -149,38 +185,41 @@ async function subirArchivo(tipo, fecha) {
   );
   form.append('file', file);
 
-  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-    method: 'POST',
-    headers: new Headers({
-      Authorization: 'Bearer ' + accessToken,
-    }),
-    body: form,
-  })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log('Archivo subido:', data);
+  try {
+    const response = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {
+        method: 'POST',
+        headers: new Headers({
+          Authorization: 'Bearer ' + accessToken,
+        }),
+        body: form,
+      }
+    );
+
+    const data = await response.json();
+    console.log('Archivo subido:', data);
+
+    if (data.id) {
       alert(`Archivo subido correctamente: ${data.name}`);
-      // data.description contendrá la fecha si la guardamos
-      // data.webViewLink NO la tenemos de manera predeterminada a menos que
-      // usemos ?fields=id,name,webViewLink,description en la creación
-      // Para simplificar, recargaremos la tabla
-      // O bien, podemos llamar a agregarFila con la info que tenemos:
-      // OJO: la API de subida no siempre devuelve webViewLink directo.
-      // Podemos forzar un nuevo fetch o suponer que data.id es suficiente.
-      obtenerInfoArchivo(tipo, data.id, file.name, fecha);
-      // Limpieza de inputs:
+      // Obtenemos info adicional (webViewLink, etc.) con otra petición
+      obtenerInfoArchivo(tipo, data.id, data.name, infoMetadata);
       document.getElementById('fileInputModal').value = '';
-    })
-    .catch((error) => {
-      console.error('Error al subir archivo:', error);
-      alert('Error al subir archivo.');
-    });
+    } else {
+      throw new Error('No se obtuvo un ID de archivo en la respuesta');
+    }
+  } catch (error) {
+    console.error('Error al subir archivo:', error);
+    alert('Error al subir archivo.');
+  }
 }
 
 /********************************************************
- * 4. Obtener info adicional del archivo (webViewLink) y actualizar tabla
+ * Obtener info adicional del archivo (webViewLink)
+ * y actualizar la tabla
  ********************************************************/
-async function obtenerInfoArchivo(tipo, fileId, fileName, fecha) {
+async function obtenerInfoArchivo(tipo, fileId, fileName, infoMetadata) {
+  // infoMetadata = { fechaSubida, recordatorio, fechaVencimiento, tipo }
   try {
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,webViewLink,description`,
@@ -192,17 +231,28 @@ async function obtenerInfoArchivo(tipo, fileId, fileName, fecha) {
       }
     );
     const data = await response.json();
-    // Llamamos a la función para agregar la fila
-    agregarFila(tipo, data.name, data.id, data.webViewLink, data.description || fecha);
+
+    // Asegurarnos de parsear la description (si existe)
+    let fechaMostrada = '';
+    try {
+      const metaObj = JSON.parse(data.description);
+      fechaMostrada = metaObj.fechaSubida || '';
+    } catch (e) {
+      // Si hay error, usamos la fechaSubida que tenemos localmente
+      fechaMostrada = infoMetadata.fechaSubida;
+    }
+
+    // Agregamos la fila a la tabla
+    agregarFila(tipo, data.name, data.id, data.webViewLink, fechaMostrada);
   } catch (error) {
     console.error('Error al obtener info del archivo:', error);
-    // Si falla, al menos agregamos la fila con la info mínima
-    agregarFila(tipo, fileName, fileId, '', fecha);
+    // Como fallback, agregamos la fila con la info mínima
+    agregarFila(tipo, fileName, fileId, '', infoMetadata.fechaSubida);
   }
 }
 
 /********************************************************
- * 5. Crear carpeta en Google Drive si no existe
+ * Crear carpeta en Google Drive si no existe
  ********************************************************/
 async function createFolder(folderName) {
   if (folderNames[folderName]) return folderNames[folderName];
@@ -232,7 +282,9 @@ async function createFolder(folderName) {
   return data.id;
 }
 
-// Buscar carpeta en Google Drive
+/********************************************************
+ * Buscar carpeta en Google Drive
+ ********************************************************/
 async function getFolderId(folderName) {
   const response = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=name='${folderName}'+and+mimeType='application/vnd.google-apps.folder'`,
@@ -251,12 +303,13 @@ async function getFolderId(folderName) {
 }
 
 /********************************************************
- * 6. Cargar archivos existentes (con fecha en description)
+ * Cargar archivos existentes
+ *   Lee la 'description' para extraer la fecha guardada
  ********************************************************/
 async function cargarArchivos() {
   for (const [tipo, folderId] of Object.entries(folderNames)) {
     const id = await createFolder(tipo); // Crear carpeta si no existe
-    // Agregar description al fields para obtener la fecha guardada
+    // Pedimos description para recuperar la fecha
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files?q='${id}'+in+parents&fields=files(id,name,webViewLink,description)`,
       {
@@ -272,15 +325,24 @@ async function cargarArchivos() {
 
     if (data.files && data.files.length > 0) {
       data.files.forEach((file) => {
-        // file.description será la fecha si así lo guardamos
-        agregarFila(tipo, file.name, file.id, file.webViewLink, file.description);
+        let fechaMostrada = '';
+        // Parseamos la description
+        if (file.description) {
+          try {
+            const metaObj = JSON.parse(file.description);
+            fechaMostrada = metaObj.fechaSubida || '';
+          } catch (e) {
+            // Si no es JSON válido, lo dejamos en blanco
+          }
+        }
+        agregarFila(tipo, file.name, file.id, file.webViewLink, fechaMostrada);
       });
     }
   }
 }
 
 /********************************************************
- * 7. Agregar fila a la tabla (con columna Fecha)
+ * Agregar fila a la tabla (con columna Fecha)
  ********************************************************/
 function agregarFila(tipo, nombre, id, webViewLink, fecha) {
   const tableId =
@@ -304,14 +366,13 @@ function agregarFila(tipo, nombre, id, webViewLink, fecha) {
   // Botón para eliminar
   const eliminarBtn = `<button class="btn btn-danger btn-sm" onclick="eliminarArchivo('${tipo}', '${id}')">Eliminar</button>`;
 
-  // Agregamos la fila con la nueva columna 'Fecha'
-  // El orden de columnas en DataTable debe coincidir con tu configuración en el init
+  // Agregamos la fila (asegúrate de que tus DataTables tienen 4 columnas)
   tabla.row.add([nombre, fecha || '', visualizarBtn, eliminarBtn]).node().id = id;
   tabla.draw();
 }
 
 /********************************************************
- * 8. Limpiar tabla
+ * Limpiar tabla
  ********************************************************/
 function limpiarTabla(tipo) {
   const tableId =
@@ -326,7 +387,7 @@ function limpiarTabla(tipo) {
 }
 
 /********************************************************
- * 9. Eliminar archivo en Google Drive
+ * Eliminar archivo en Google Drive
  ********************************************************/
 async function eliminarArchivo(tipo, id) {
   const tableId =
@@ -355,7 +416,7 @@ async function eliminarArchivo(tipo, id) {
 }
 
 /********************************************************
- * 10. Cambiar entre secciones
+ * Cambiar entre secciones
  ********************************************************/
 function mostrarSeccion(seccion) {
   document.querySelectorAll('section').forEach((sec) => {
@@ -365,13 +426,13 @@ function mostrarSeccion(seccion) {
 }
 
 /********************************************************
- * 11. Inicializar la aplicación al cargar la página
+ * Inicializar la aplicación al cargar la página
  ********************************************************/
 document.addEventListener('DOMContentLoaded', () => {
   initGoogleAPI();
 
-  // Inicializar DataTables con la nueva columna "Fecha"
-  // Recuerda que el orden de columns[] debe coincidir con el orden en agregarFila()
+  // Inicializar DataTables (con columna "Fecha")
+  // El orden: [ Nombre, Fecha, Visualizar, Eliminar ]
   ['tablaExamenes', 'tablaVisitas', 'tablaAntecedentes'].forEach((id) => {
     $(`#${id}`).DataTable({
       columns: [
@@ -387,6 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-btn').addEventListener('click', handleAuthClick);
   document.getElementById('logout-btn').addEventListener('click', handleSignOutClick);
 });
+
 
 
 /*
