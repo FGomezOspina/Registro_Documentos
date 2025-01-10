@@ -100,7 +100,6 @@ function abrirModal(tipo) {
  ********************************************************/
 function calcularFechaVencimiento(fechaBase, recordatorio) {
   // Ejemplo:
-  // fechaBase = "2025-01-07"
   // recordatorio = "0 meses", "1 mes", "2 meses", "12 meses", etc.
   const [year, month, day] = fechaBase.split('-').map(Number);
   let dateObj = new Date(year, month - 1, day);
