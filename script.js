@@ -10,11 +10,12 @@ let accessToken = null;
 // Para saber a qué sección (tipo) pertenece la subida actual
 let tipoDocumentoActual = null;
 
-// Objeto para almacenar los folderIds
+// Objeto para almacenar los folderIds (se agrega "Pruebas de consumo")
 const folderNames = {
   'Exámenes Médicos': null,
   'Visitas Domiciliarias': null,
   'Consultas de Antecedentes': null,
+  'Pruebas de consumo': null,
 };
 
 // 1. Inicializar Google Identity Services
@@ -349,7 +350,11 @@ function agregarFila(tipo, nombre, id, webViewLink, fecha) {
       ? 'tablaExamenes'
       : tipo === 'Visitas Domiciliarias'
       ? 'tablaVisitas'
-      : 'tablaAntecedentes';
+      : tipo === 'Consultas de Antecedentes'
+      ? 'tablaAntecedentes'
+      : tipo === 'Pruebas de consumo'
+      ? 'tablaPruebas'
+      : ''; // En caso de que se añada otro tipo en el futuro
 
   const tabla = $(`#${tableId}`).DataTable();
 
@@ -379,7 +384,11 @@ function limpiarTabla(tipo) {
       ? 'tablaExamenes'
       : tipo === 'Visitas Domiciliarias'
       ? 'tablaVisitas'
-      : 'tablaAntecedentes';
+      : tipo === 'Consultas de Antecedentes'
+      ? 'tablaAntecedentes'
+      : tipo === 'Pruebas de consumo'
+      ? 'tablaPruebas'
+      : '';
 
   const tabla = $(`#${tableId}`).DataTable();
   tabla.clear().draw();
@@ -394,7 +403,11 @@ async function eliminarArchivo(tipo, id) {
       ? 'tablaExamenes'
       : tipo === 'Visitas Domiciliarias'
       ? 'tablaVisitas'
-      : 'tablaAntecedentes';
+      : tipo === 'Consultas de Antecedentes'
+      ? 'tablaAntecedentes'
+      : tipo === 'Pruebas de consumo'
+      ? 'tablaPruebas'
+      : '';
 
   const tabla = $(`#${tableId}`).DataTable();
 
@@ -432,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Inicializar DataTables (con columna "Fecha")
   // El orden: [ Nombre, Fecha, Visualizar, Eliminar ]
-  ['tablaExamenes', 'tablaVisitas', 'tablaAntecedentes'].forEach((id) => {
+  ['tablaExamenes', 'tablaVisitas', 'tablaAntecedentes', 'tablaPruebas'].forEach((id) => {
     $(`#${id}`).DataTable({
       columns: [
         { title: 'Nombre' },
